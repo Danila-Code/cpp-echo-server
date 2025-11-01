@@ -87,12 +87,15 @@ public:
             std::cout << "Client connect\n"s;
 
             // read data from client
-            int bytes_read = read(client, buffer_, BUFFER_SIZE);
+            //int bytes_read = read(client, buffer_, BUFFER_SIZE);
+            int bytes_read = recv(client, buffer_, BUFFER_SIZE, 0);
+
             std::string word(buffer_, buffer_ + bytes_read);
             if (bytes_read > 0) {
                 std::cout << "Receive from client: "s << word;
                 // send echo-а эхо‑abswer
-                write(client, buffer_, bytes_read);
+                //write(client, buffer_, bytes_read);
+                send(client, buffer_, bytes_read, 0);
                 std::cout << "Send to client: "s << word;
             }
             // close connection
