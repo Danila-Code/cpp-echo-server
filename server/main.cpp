@@ -1,9 +1,8 @@
+#include <fstream>
+
 #include "server.h"
 
 int main() {
-    std::string stop_word;
-    std::cin >> stop_word;
-
     struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -15,9 +14,11 @@ int main() {
                                 .SetProtocol(0)
                                 .SetAddress(address)
                                 .SetMaxQueueLength(5);
+    std::ofstream log_file("server.log", std::ios::app);
+    Logger logger(log_file);
     
-    Server server(server_params);
-
+    Server server(server_params, logger);
+    
     server.StartServer();
-    server.ProcessConnection(stop_word);
+    server.ProcessConnection();
 }

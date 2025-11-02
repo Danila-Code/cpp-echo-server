@@ -6,10 +6,33 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
+#include "logger.h"
+
 using namespace std::literals;
 
 const int PORT = 8080;
 const int BUFFER_SIZE = 1024;
+
+const std::string HTML_PAGE =
+    "<html lang=\"ru\">\n"
+    "<head>\n"
+    "<meta charset=\"utf-8\">\n"
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+    "<title>Мой первый HTTP-сервер</title>\n"
+    "</head>\n"
+    "<body>\n"
+    "<header>С++ сервер</header>\n"
+    "<h1>Привет от С++!</h1>\n"
+    "</header>\n"
+    "<main>\n"
+    "</main>\n"
+    "<footer>\n"
+    "</footer>\n"
+    "</body>\n"
+    "</html>\n"s;
+const std::string HTTP_RESPONSE = 
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html; charset=utf-8\r\n"s;
 
 struct ServerParams {
     ServerParams& SetDomain(int value) {
@@ -47,16 +70,17 @@ struct ServerParams {
 
 class Server {
 public:
-    explicit Server(ServerParams params) : params_{params} {
+    explicit Server(ServerParams params, Logger& logger)
+            : params_{params}, logger_{logger} {
         if (!CreateSocket()) {
             throw "Error creating socket"s;
         }
-        std::cout << "Create socket\n"s;
-        if (BindSocket()) {
+        logger_("Create socket"sv);
+        if (!BindSocket()) {
             close(socket_);
             throw "Error binding socket"s;
         }
-        std::cout << "Bind socket\n"s;
+        logger_("Bind socket"sv);
     }
 
     ~Server() {
@@ -68,51 +92,43 @@ public:
             close(socket_);
             throw "Error on listening port"s;
         }
-        std::cout << "Start listening\n"s;
+        logger_("Start listening"sv);
     }
 
-    void ProcessConnection(std::string_view stop_word) {
+    void ProcessConnection() {
         int addrlen = sizeof(params_.address);
-        bool continue_connection = true;
 
-        while (continue_connection) {
+        while (true) {
             int client;
             // accept clietn connection
             if ((client = accept(socket_, (struct sockaddr *)&params_.address, (socklen_t*)&addrlen)) < 0) {
                 throw "Error accept connection"s;
                 close(socket_);
             }
-            std::cout << "-----------------------------------\n"s;
-            std::cout << "Begin connection\n"s;
-            std::cout << "Client connect\n"s;
-
+            logger_("Client connect"sv);
             // read data from client
-            //int bytes_read = read(client, buffer_, BUFFER_SIZE);
             int bytes_read = recv(client, buffer_, BUFFER_SIZE, 0);
 
             std::string word(buffer_, buffer_ + bytes_read);
             if (bytes_read > 0) {
-                std::cout << "Receive from client: "s << word;
-                // send echo-а эхо‑abswer
-                //write(client, buffer_, bytes_read);
-                send(client, buffer_, bytes_read, 0);
-                std::cout << "Send to client: "s << word;
+                logger_("Receive from client: "s + word);
+                // send response with html page
+                std::string content_length = "Content-Length: "s
+                    + std::to_string(HTML_PAGE.size())
+                    + "\r\nConnection: close\r\n\r\n"s;
+                std::string response{HTTP_RESPONSE + content_length + HTML_PAGE};
+                send(client, response.c_str(), response.size(), 0);
+                logger_("Send to client: "s + HTTP_RESPONSE);
             }
             // close connection
             close(client);
-            std::cout << "End connection with client\n"s;
-            
-            if (word.find(std::string(stop_word)) != word.npos) {
-                std::cout << "-----------------------------------\n"s;
-                std::cout << "Stop server\n"s;
-                StopServer();
-                continue_connection = false;
-            }
+            logger_("End connection with client"sv);
         }
     }
 
     // stoping server
     void StopServer() {
+        logger_("Stop server"sv);
         close(socket_);
     }
 
@@ -133,7 +149,7 @@ private:
                        (const struct sockaddr*)&params_.address,
                        sizeof(params_.address)
         );
-        return res != 0;
+        return res == 0;
     }
     // waiting for connections
     bool StartListening() {
@@ -141,6 +157,7 @@ private:
     }
 
     ServerParams params_;
+    Logger& logger_;
     int socket_{};
     char buffer_[BUFFER_SIZE] = {0};
 };
